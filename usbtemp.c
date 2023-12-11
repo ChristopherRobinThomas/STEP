@@ -114,8 +114,8 @@ static void setup_sysfs(struct usb_device* usb_dev, struct usb_interface* interf
         name[3] = 'b'; 
         name[4] = 'e'; 
         // only works for values 0-9 need to implement function to generate string from integer
-        name[6] = (char)(i-1 + 0x30);  
-        name[7] = '\0'; 
+        name[5] = (char)(i-1 + 0x30);  
+        name[6] = '\0'; 
         atr -> attr.name = name;
         atr -> attr.mode = S_IWUSR | S_IRUGO;
         atr -> show = &show; 
@@ -175,10 +175,11 @@ static uint8_t usb_message_long(struct usb_device* dev, uint8_t possible_probes,
     __u16 value = 0;
     __u16 index = 0;
     struct probe_status* data = kmalloc(sizeof(struct probe_status) * possible_probes, GFP_KERNEL);
-     __u16 size = sizeof(sizeof(struct probe_status)  * possible_probes);
+     __u16 size = sizeof(struct probe_status)  * possible_probes;
     int timeout = 1000;
     int error = usb_control_msg(dev,usb_rcvctrlpipe(dev,0), request, 0xc0, value,index, data, size, timeout);
     uint8_t count = -1;
+    pr_info("value %d, size: %d \n",error,size);
     if(error < 0)
     {
         pr_info("error %d \n",error);
@@ -200,9 +201,8 @@ static uint8_t usb_message_long(struct usb_device* dev, uint8_t possible_probes,
         // Read from one probe
         else{
             // Should work have no idea why not anymore ????
-            print_temp(data -> temperature[0], data -> temperature[1]);
-            int temperature = data->temperature[0] + (data->temperature[1] << 8);
-            pr_info("Real Temp: %d\n", temperature);
+            print_temp(data[type].temperature[0], data[type].temperature[1]);
+            pr_info("Type: %d\n", type);
 
             /*
             for(int i = 0; i < possible_probes; i++){
@@ -338,6 +338,7 @@ static ssize_t show(struct device *dev, struct device_attribute *attr,char *buf)
 
     // Read probe pos from name
     int probe_pos = (int)attr -> attr.name[5] - 0x30; 
+    pr_info("value: %d",probe_pos);
     usb_message_long(usb_dev, 8, probe_pos);
     return 0;
 }
@@ -371,7 +372,9 @@ static ssize_t store_main(struct device *dev, struct device_attribute *attr,cons
     if(buf[0] == '1')
     {
         // Rescan
+        deactivate_sysfs(usb_inter);
         usb_message_rescan(usb_dev);
+        setup_sysfs(usb_dev,usb_inter);
         return count;
     }
     if(buf[0] == '2')
